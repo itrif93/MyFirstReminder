@@ -1,16 +1,23 @@
-# test.py
+# tests/test.py
+import sys
+import os
 import pytest
 from datetime import datetime
 from unittest.mock import Mock, patch
-import widget
+import requests
+
+# Добавляем родительскую директорию в путь поиска модулей
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from widget import ReminderWidget  # Импортируем класс из widget.py
 
 class TestReminderWidget:
     
     def setup_method(self):
         """Настройка перед каждым тестом"""
-        self.widget = reminder_widget.ReminderWidget("https://drive.google.com/uc?export=download&id=1YAOp8GZr1W3AIeN4VY3TwjG1SL22hCnb")
+        self.widget = ReminderWidget("https://drive.google.com/uc?export=download&id=1YAOp8GZr1W3AIeN4VY3TwjG1SL22hCnb")
     
-    @patch('reminder_widget.requests.get')
+    @patch('widget.requests.get')  # Теперь патчим widget.requests, а не reminder_widget.requests
     def test_download_reminders_success(self, mock_get):
         """Тест успешной загрузки напоминаний с Google Drive"""
         # Настраиваем mock
@@ -24,7 +31,7 @@ class TestReminderWidget:
         assert result == [{"day": 10, "message": "Тест"}]
         mock_get.assert_called_once_with("https://drive.google.com/uc?export=download&id=1YAOp8GZr1W3AIeN4VY3TwjG1SL22hCnb", timeout=10)
     
-    @patch('reminder_widget.requests.get')
+    @patch('widget.requests.get')
     def test_download_reminders_network_error(self, mock_get):
         """Тест обработки ошибки сети"""
         mock_get.side_effect = requests.exceptions.RequestException("Network error")
@@ -49,7 +56,7 @@ class TestReminderWidget:
         ]
         
         # Мокаем текущий день (предположим, что сегодня 10-е)
-        with patch('reminder_widget.datetime') as mock_datetime:
+        with patch('widget.datetime') as mock_datetime:  # Изменено на widget.datetime
             mock_now = Mock()
             mock_now.day = 10
             mock_datetime.now.return_value = mock_now
@@ -67,7 +74,7 @@ class TestReminderWidget:
         ]
         
         # Мокаем текущий день (сегодня 10-е)
-        with patch('reminder_widget.datetime') as mock_datetime:
+        with patch('widget.datetime') as mock_datetime:  # Изменено на widget.datetime
             mock_now = Mock()
             mock_now.day = 10
             mock_datetime.now.return_value = mock_now
@@ -79,7 +86,7 @@ class TestReminderWidget:
         assert "Еще одно сегодняшнее" in result
         assert "Будущее напоминание" not in result
     
-    @patch('reminder_widget.notification.notify')
+    @patch('widget.notification.notify')  # Изменено на widget.notification
     def test_show_notification_success(self, mock_notify):
         """Тест успешного показа уведомления"""
         mock_notify.return_value = None
@@ -89,9 +96,9 @@ class TestReminderWidget:
         assert result is True
         mock_notify.assert_called_once()
     
-    @patch('reminder_widget.ReminderWidget.download_reminders')
-    @patch('reminder_widget.ReminderWidget.show_notification')
-    @patch('reminder_widget.time.sleep')
+    @patch('widget.ReminderWidget.download_reminders')  # Изменено на widget.ReminderWidget
+    @patch('widget.ReminderWidget.show_notification')   # Изменено на widget.ReminderWidget
+    @patch('widget.time.sleep')                         # Изменено на widget.time
     def test_check_reminders_integration(self, mock_sleep, mock_show, mock_download):
         """Интеграционный тест всей цепочки проверки напоминаний"""
         # Настраиваем моки
@@ -104,7 +111,7 @@ class TestReminderWidget:
         mock_show.return_value = True
         
         # Мокаем текущую дату
-        with patch('reminder_widget.datetime') as mock_datetime:
+        with patch('widget.datetime') as mock_datetime:  # Изменено на widget.datetime
             mock_now = Mock()
             mock_now.day = 10
             mock_datetime.now.return_value = mock_now
