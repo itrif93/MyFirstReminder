@@ -1,3 +1,4 @@
+# reminder_widget.py
 import requests
 from plyer import notification
 import json
@@ -5,68 +6,103 @@ from datetime import datetime
 import time
 import schedule
 
-# Конфигурация (поменяй эти значения на свои!)
-URL_TO_JSON = "https://drive.google.com/uc?export=download&id=1YAOp8GZr1W3AIeN4VY3TwjG1SL22hCnb"  # <-- Вставь сюда свою ссылку!
-CHECK_TIME = "09:30"  # Время ежедневной проверки (ЧЧ:ММ)
-
-def check_reminders():
-    """Основная функция: загружает файл, проверяет даты и показывает уведомления"""
-    try:
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Загружаю файл с напоминаниями...")
+class ReminderWidget:
+    def __init__(self, direct_download_url):
+        self.direct_download_url = direct_download_url
+    
+    def download_reminders(self):
+        """Загружает JSON с напоминаниями из Google Drive"""
+        try:
+            print(f"Загружаю файл по ссылке: {self.direct_download_url}")
+            response = requests.get(self.direct_download_url, timeout=10)
+            response.raise_for_status()  # Проверяем ошибки HTTP
+            
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"Ошибка сети при загрузке файла: {e}")
+            return None
+        except json.JSONDecodeError as e:
+            print(f"Ошибка при разборе JSON: {e}")
+            print(f"Ответ сервера: {response.text[:200]}...")  # Покажем начало ответа для дебага
+            return None
+        except Exception as e:
+            print(f"Неизвестная ошибка при загрузке: {e}")
+            return None
+    
+    def parse_reminders(self, reminders_data):
+        """Парсит напоминания и возвращает те, которые актуальны на сегодня"""
+        if not reminders_data:
+            return []
         
-        # Загружаем файл по сети
-        response = requests.get(URL_TO_JSON)
-        response.raise_for_status()  # Проверяем, нет ли ошибок HTTP (например, 404)
-        
-        # Парсим JSON
-        reminders = response.json()
-        
-        # Получаем текущее число месяца
         today_day = datetime.now().day
-        print(f"Сегодня {today_day}-е число. Ищу напоминания...")
+        today_reminders = []
         
-        # Проходим по всем напоминаниям из файла
-        for reminder in reminders:
-            if reminder['day'] == today_day:
-                message = reminder['message']
-                print(f"Найдено напоминание: {message}")
-                
-                # Показываем уведомление с помощью plyer
-                notification.notify(
-                    title='Ваше ежедневное напоминание!',  # Заголовок уведомления
-                    message=message,                       # Текст из файла
-                    app_name='Мой Виджет Напоминаний',     # Название приложения
-                    timeout=10,                            # Уведомление будет видно 10 секунд
-                    # toast=True  # Раскомментировать для стиля "Toast" в Windows 10/11
-                )
-                # Делаем небольшую паузу между уведомлениями, если их несколько
-                time.sleep(2)
-                
-        print("Проверка завершена.\n")
+        for reminder in reminders_data:
+            if reminder.get('day') == today_day:
+                today_reminders.append(reminder.get('message', ''))
+        
+        return today_reminders
+    
+    def show_notification(self, message):
+        """Показывает уведомление"""
+        try:
+            notification.notify(
+                title='Ваше ежедневное напоминание!',
+                message=message,
+                app_name='Мой Виджет Напоминаний',
+                timeout=10
+            )
+            return True
+        except Exception as e:
+            print(f"Ошибка при показе уведомления: {e}")
+            return False
+    
+    def check_reminders(self):
+        """Основная функция проверки напоминаний"""
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Проверяю напоминания...")
+        
+        reminders_data = self.download_reminders()
+        if reminders_data is None:
+            print("Не удалось загрузить напоминания")
+            return []
+        
+        today_reminders = self.parse_reminders(reminders_data)
+        
+        if today_reminders:
+            print(f"Найдено напоминаний на сегодня: {len(today_reminders)}")
+            for message in today_reminders:
+                print(f"Показываю уведомление: {message}")
+                self.show_notification(message)
+                time.sleep(1)  # Пауза между уведомлениями
+        else:
+            print("На сегодня напоминаний нет")
+        
+        return today_reminders
 
-    except requests.exceptions.RequestException as e:
-        print(f"Ошибка при загрузке файла из интернета: {e}")
-    except json.JSONDecodeError as e:
-        print(f"Ошибка при разборе JSON. Проверь формат файла: {e}")
-    except Exception as e:
-        print(f"Неизвестная ошибка: {e}")
-
-# Планируем задачу
 def main():
-    print(f"Виджет напоминаний запущен! Проверка ежедневно в {CHECK_TIME}")
-    print("Для остановки нажми Ctrl+C\n")
+    # Жестко зашитая прямая ссылка для скачивания с Google Disk
+    DIRECT_DOWNLOAD_URL = "https://drive.google.com/uc?export=download&id=1YAOp8GZr1W3AIeN4VY3TwjG1SL22hCnb"
+    CHECK_TIME = "09:30"
     
-    # Планируем выполнение функции check_reminders каждый день в заданное время
-    schedule.every().day.at(CHECK_TIME).do(check_reminders)
+    widget = ReminderWidget(DIRECT_DOWNLOAD_URL)
     
-    # Также выполняем проверку сразу при запуске (можно закомментировать, если не нужно)
-    check_reminders()
+    print(f"Виджет напоминаний запущен!")
+    print(f"Проверка ежедневно в {CHECK_TIME}")
+    print("Для остановки нажмите Ctrl+C\n")
     
-    # Бесконечный цикл для работы планировщика
-    while True:
-        schedule.run_pending()
-        time.sleep(60)  # Проверяем расписание каждую минуту
+    # Планируем выполнение
+    schedule.every().day.at(CHECK_TIME).do(widget.check_reminders)
+    
+    # Проверка при запуске
+    widget.check_reminders()
+    
+    # Бесконечный цикл
+    try:
+        while True:
+            schedule.run_pending()
+            time.sleep(60)
+    except KeyboardInterrupt:
+        print("\nВиджет остановлен пользователем")
 
-# Запускаем программу
 if __name__ == "__main__":
     main()
