@@ -5,6 +5,7 @@ import json
 from datetime import datetime
 import time
 import schedule
+import sys
 
 class ReminderWidget:
     def __init__(self, direct_download_url):
@@ -41,10 +42,6 @@ class ReminderWidget:
             
             print(f"Интернет недоступен. Повторная проверка через {self.internet_check_delay} секунд...")
             time.sleep(self.internet_check_delay)
-            
-            # Проверяем, не нужно ли выйти из бесконечного цикла
-            # (например, по сигналу завершения программы)
-            # В реальном приложении можно добавить флаг для остановки
     
     def download_reminders_with_retry(self):
         """Загружает JSON с напоминаниями после проверки интернета"""
@@ -81,10 +78,6 @@ class ReminderWidget:
             print(f"Неизвестная ошибка при загрузке: {e}")
             return None
     
-    def download_reminders(self):
-        """Основной метод загрузки (для обратной совместимости)"""
-        return self.download_reminders_with_retry()
-    
     def parse_reminders(self, reminders_data):
         """Парсит напоминания и возвращает те, которые актуальны на сегодня"""
         if not reminders_data:
@@ -113,53 +106,59 @@ class ReminderWidget:
             print(f"Ошибка при показе уведомления: {e}")
             return False
     
-    def check_reminders(self):
-        """Основная функция проверки напоминаний"""
+    def check_reminders_and_exit(self):
+        """Основная функция проверки напоминаний с автоматическим выходом"""
         print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Запуск проверки напоминаний...")
         
         reminders_data = self.download_reminders_with_retry()
         if reminders_data is None:
-            print("Не удалось загрузить напоминания")
-            return []
+            print("Не удалось загрузить напоминания. Завершение работы.")
+            return False
         
         today_reminders = self.parse_reminders(reminders_data)
         
         if today_reminders:
             print(f"Найдено напоминаний на сегодня: {len(today_reminders)}")
-            for message in today_reminders:
-                print(f"Показываю уведомление: {message}")
+            for i, message in enumerate(today_reminders):
+                print(f"Показываю уведомление {i+1}/{len(today_reminders)}: {message}")
                 self.show_notification(message)
-                time.sleep(1)
+                # Небольшая пауза между уведомлениями, если их несколько
+                if i < len(today_reminders) - 1:
+                    time.sleep(2)
+            
+            print("Все уведомления показаны. Завершение работы.")
+            return True  # Сигнал к завершению после показа уведомлений
         else:
-            print("На сегодня напоминаний нет")
+            print("На сегодня напоминаний нет. Завершение работы.")
+            return True  # Сигнал к завершению, т.к. уведомлений нет
+    
+    def run_once(self):
+        """Запускает однократную проверку и завершает работу"""
+        print("=" * 50)
+        print("Запуск виджета в режиме однократной проверки")
+        print("=" * 50)
         
-        return today_reminders
+        should_exit = self.check_reminders_and_exit()
+        
+        if should_exit:
+            print("Виджет завершает работу.")
+            sys.exit(0)
+        else:
+            print("Произошла ошибка. Завершение работы.")
+            sys.exit(1)
 
 def main():
     # Жестко зашитая прямая ссылка для скачивания с Google Disk
     DIRECT_DOWNLOAD_URL = "https://drive.google.com/uc?export=download&id=1YAOp8GZr1W3AIeN4VY3TwjG1SL22hCnb"
-    CHECK_TIME = "09:00"
     
     widget = ReminderWidget(DIRECT_DOWNLOAD_URL)
     
     print(f"Виджет напоминаний запущен!")
-    print(f"Задержка между проверками интернета: {widget.internet_check_delay} секунд")
-    print(f"Проверка ежедневно в {CHECK_TIME}")
-    print("Для остановки нажмите Ctrl+C\n")
+    print(f"Режим: однократная проверка с автоматическим закрытием")
+    print("=" * 50)
     
-    # Планируем выполнение
-    schedule.every().day.at(CHECK_TIME).do(widget.check_reminders)
-    
-    # Проверка при запуске
-    widget.check_reminders()
-    
-    # Бесконечный цикл
-    try:
-        while True:
-            schedule.run_pending()
-            time.sleep(60)
-    except KeyboardInterrupt:
-        print("\nВиджет остановлен пользователем")
+    # Запускаем однократную проверку
+    widget.run_once()
 
 if __name__ == "__main__":
     main()
